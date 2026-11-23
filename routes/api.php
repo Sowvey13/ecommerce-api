@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
 
     Route::apiResource('orders', OrderController::class)->only(['index', 'show', 'store']);
     Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::post('/orders/{id}/pay', [OrderController::class, 'pay']);
     Route::patch('/orders/{id}/status', [OrderController::class, 'updateStatus'])
         ->middleware('admin');
 });

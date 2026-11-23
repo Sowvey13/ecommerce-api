@@ -166,7 +166,7 @@ class OrderController extends Controller
             'Sipariş durumu başarıyla güncellendi.'
         );
     }
-    
+
     public function cancel($id)
     {
         $userId = Auth::id();
@@ -207,5 +207,48 @@ class OrderController extends Controller
         }
 
         return $this->success($order->fresh()->load('items.product', 'address'), 'Sipariş başarıyla iptal edildi ve stoklar iade edildi.');
+    }
+    public function pay(Request $request, $id)
+    {
+        $validatedData = $request->validate([
+            'payment_method' => 'nullable|string|in:card,bank_transfer,mock',
+            'simulate'       => 'nullable|string|in:success,fail',
+        ]);
+
+        $userId = Auth::id();
+
+        $order = Order::with('items.product', 'address')
+            ->where('user_id', $userId)
+            ->where('id', $id)
+            ->first();
+
+        if (!$order) {
+            return $this->error('Sipariş bulunamadı.', 404);
+        }
+
+        if ($order->status === 'paid') {
+            return $this->error('Bu siparişin ödemesi zaten tamamlanmış.', 400);
+        }
+
+        if ($order->status === 'cancelled') {
+            return $this->error('İptal edilmiş bir sipariş için ödeme alınamaz.', 400);
+        }
+
+        if ($order->status !== 'pending') {
+            return $this->error('Yalnızca beklemedeki siparişler için ödeme alınabilir.', 400);
+        }
+
+        $simulate = $validatedData['simulate'] ?? 'success';
+
+        if ($simulate === 'fail') {
+            return $this->error('Sahte ödeme işlemi başarısız oldu. Sipariş beklemede kaldı.', 400);
+        }
+
+        $order->update([
+            'status' => 'paid',
+        ]);
+
+        return $this->success(
+            $order->fresh()->load('items.product', 'address'), 'Ödeme başarıyla tamamlandı.');
     }
 }
