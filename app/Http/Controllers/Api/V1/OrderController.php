@@ -208,7 +208,8 @@ class OrderController extends Controller
 
         return $this->success($order->fresh()->load('items.product', 'address'), 'Sipariş başarıyla iptal edildi ve stoklar iade edildi.');
     }
-    public function pay(Request $request, $id)
+
+    public function pay(Request $request, $id)  
     {
         $validatedData = $request->validate([
             'payment_method' => 'nullable|string|in:card,bank_transfer,mock',

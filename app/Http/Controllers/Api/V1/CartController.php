@@ -8,25 +8,94 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
     use ApiResponse;
 
-    public function index()
+    private function currentUserId(Request $request): ?int
     {
-        $userId = Auth::id();
+        $user = $request->user('sanctum');
 
-        $cart = Cart::with('items.product')
-            ->where('user_id', $userId)
-            ->first();
+        return $user?->id;
+    }
 
-        if (!$cart) {
-            return $this->error('Sepet bulunamadı.', 404);
+    private function findCart(Request $request, bool $createIfMissing = false): array
+    {
+        $userId = $this->currentUserId($request);
+
+        if ($userId) {
+            $cart = Cart::with('items.product')
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$cart && $createIfMissing) {
+                $cart = Cart::create([
+                    'user_id'     => $userId,
+                    'guest_token' => null,
+                ]);
+                $cart->load('items.product');
+            }
+
+            return [$cart, null];
         }
 
-        return $this->success($cart, 'Sepet başarıyla görüntülendi.');
+        $guestToken = $request->header('X-Cart-Token');
+
+        if ($guestToken) {
+            $cart = Cart::with('items.product')
+                ->where('guest_token', $guestToken)
+                ->first();
+
+            if (!$cart && $createIfMissing) {
+                $cart = Cart::create([
+                    'user_id'     => null,
+                    'guest_token' => $guestToken,
+                ]);
+                $cart->load('items.product');
+            }
+
+            return [$cart, $guestToken];
+        }
+
+        if ($createIfMissing) {
+            $newToken = (string) Str::uuid();
+            $cart = Cart::create([
+                'user_id'     => null,
+                'guest_token' => $newToken,
+            ]);
+            $cart->load('items.product');
+
+            return [$cart, $newToken];
+        }
+
+        return [null, null];
+    }
+
+    private function cartPayload(Cart $cart, ?string $guestToken): array
+    {
+        $data = $cart->toArray();
+
+        if ($guestToken) {
+            $data['guest_token'] = $guestToken;
+        }
+
+        return $data;
+    }   
+
+    public function index(Request $request)
+    {
+        [$cart, $guestToken] = $this->findCart($request, false);
+
+        if (!$cart) {
+            return $this->error('Sepet bulunamadı.', 404);  
+        }
+
+        return $this->success(
+            $this->cartPayload($cart, $guestToken ?? $cart->guest_token),
+            'Sepet başarıyla görüntülendi.'
+        );
     }
 
     public function store(Request $request)
@@ -42,8 +111,7 @@ class CartController extends Controller
             return $this->error('Bu ürün şu anda satışta değil.', 400);
         }
 
-        $userId = Auth::id();
-        $cart = Cart::firstOrCreate(['user_id' => $userId]);
+        [$cart, $token] = $this->findCart($request, true);
 
         $cartItem = CartItem::where('cart_id', $cart->id)
             ->where('product_id', $product->id)
@@ -65,7 +133,14 @@ class CartController extends Controller
             ]);
         }
 
-        return $this->success($cart->load('items.product'), 'Ürün sepete başarıyla eklendi.', 201);
+        $cart->load('items.product');
+        $activeToken = $token ?? $cart->guest_token;
+
+        return $this->success(
+            $this->cartPayload($cart, $activeToken),
+            'Ürün sepete başarıyla eklendi.',
+            201
+        );
     }
 
     public function update(Request $request, $productId)
@@ -74,8 +149,7 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $userId = Auth::id();
-        $cart = Cart::where('user_id', $userId)->first();
+        [$cart, $token] = $this->findCart($request, false);
 
         if (!$cart) {
             return $this->error('Sepet bulunamadı.', 404);
@@ -100,14 +174,17 @@ class CartController extends Controller
         }
 
         $cartItem->update(['quantity' => $validatedData['quantity']]);
+        $cart->load('items.product');
 
-        return $this->success($cart->load('items.product'), 'Sepet başarıyla güncellendi.');
+        return $this->success(
+            $this->cartPayload($cart, $token ?? $cart->guest_token),
+            'Sepet başarıyla güncellendi.'
+        );
     }
 
-    public function destroy($productId)
+    public function destroy(Request $request, $productId)
     {
-        $userId = Auth::id();
-        $cart = Cart::where('user_id', $userId)->first();
+        [$cart, $token] = $this->findCart($request, false);
 
         if (!$cart) {
             return $this->error('Sepet bulunamadı.', 404);
@@ -122,7 +199,11 @@ class CartController extends Controller
         }
 
         $cartItem->delete();
+        $cart->load('items.product');
 
-        return $this->success($cart->load('items.product'), 'Ürün sepetten başarıyla silindi.');
+        return $this->success(
+            $this->cartPayload($cart, $token ?? $cart->guest_token),
+            'Ürün sepetten başarıyla silindi.'
+        );
     }
 }
