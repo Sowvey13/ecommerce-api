@@ -20,22 +20,22 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $validatedData = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:6',
         ]);
 
         $user = User::create([
-            'name' => $validatedData['name'],
-            'email' => $validatedData['email'],
+            'name'     => $validatedData['name'],
+            'email'    => $validatedData['email'],
             'password' => Hash::make($validatedData['password']),
-            'role' => 'customer',
+            'role'     => 'customer',
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->success([
-            'user' => $user,
+            'user'  => $user,
             'token' => $token,
         ], 'Kayıt başarıyla oluşturuldu.', 201);
     }
@@ -43,7 +43,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validatedData = $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
@@ -56,7 +56,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->success([
-            'user' => $user,
+            'user'  => $user,
             'token' => $token,
         ], 'Giriş başarıyla yapıldı.', 200);
     }
@@ -83,12 +83,13 @@ class AuthController extends Controller
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $validated['email']],
             [
-               'token' => Hash::make($plainToken),
-               'created_at' => Carbon::now(),
-            ]);
+                'token'      => Hash::make($plainToken),
+                'created_at' => Carbon::now(),
+            ]
+        );
 
         Mail::raw(
-            "Şifre sıfırlama kodunuz / token'ınız:\n\n{$plainToken}\n\n Bu kod 60 dakika geçerlidir.",
+            "Şifre sıfırlama kodunuz / token'ınız:\n\n{$plainToken}\n\nBu kod 60 dakika geçerlidir.",
             function ($message) use ($validated) {
                 $message->to($validated['email'])
                     ->subject('Şifre Sıfırlama Talebi');
@@ -104,8 +105,8 @@ class AuthController extends Controller
     public function resetPassword(Request $request)
     {
         $validated = $request->validate([
-            'email' => 'required|email|exists:users,email',
-            'token' => 'required|string',
+            'email'    => 'required|email|exists:users,email',
+            'token'    => 'required|string',
             'password' => 'required|string|min:6|confirmed',
         ]);
 
@@ -134,12 +135,13 @@ class AuthController extends Controller
         return $this->success(null, 'Şifreniz başarıyla güncellendi. Lütfen tekrar giriş yapın.');
     }
 
-    public function updateProfile(Request $request){
+    public function updateProfile(Request $request)
+    {
         $user = $request->user();
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
+            'name'  => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
         ]);
 
         $user->update($validated);

@@ -16,7 +16,7 @@ class AddressController extends Controller
     {
         $userId = Auth::id();
 
-        $addresses = Address::where('user_id', $userId)->get();
+        $addresses = Address::where('user_id', $userId)->latest()->get();
 
         if ($addresses->isEmpty()) {
             return $this->success([], 'Henüz kayıtlı bir adresiniz bulunmuyor.');
@@ -79,10 +79,10 @@ class AddressController extends Controller
         }
 
         $validatedData = $request->validate([
-            'title'        => 'sometimes|string|max:255',
-            'address_line' => 'sometimes|string',
-            'district'     => 'sometimes|string|max:255',
-            'city'         => 'sometimes|string|max:255',
+            'title'        => 'sometimes|required|string|max:255',
+            'address_line' => 'sometimes|required|string',
+            'district'     => 'sometimes|required|string|max:255',
+            'city'         => 'sometimes|required|string|max:255',
             'postal_code'  => 'nullable|string|max:20',
             'is_default'   => 'boolean',
         ]);

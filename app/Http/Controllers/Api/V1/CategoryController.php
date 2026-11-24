@@ -56,7 +56,7 @@ class CategoryController extends Controller
         $descendantIds = $this->getDescendantIds((int) $id);
 
         $validatedData = $request->validate([
-            'name'      => 'sometimes|string|max:255',
+            'name'      => 'sometimes|required|string|max:255',
             'parent_id' => [
                 'nullable',
                 'sometimes',

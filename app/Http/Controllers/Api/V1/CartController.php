@@ -8,8 +8,8 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
@@ -17,9 +17,7 @@ class CartController extends Controller
 
     private function currentUserId(Request $request): ?int
     {
-        $user = $request->user('sanctum');
-
-        return $user?->id;
+        return $request->user('sanctum')?->id;
     }
 
     private function findCart(Request $request, bool $createIfMissing = false): array
@@ -79,7 +77,15 @@ class CartController extends Controller
         [$cart, $guestToken] = $this->findCart($request, false);
 
         if (!$cart) {
-            return $this->error('Sepet bulunamadı.', 404);
+            $payload = [
+                'items' => [],
+            ];
+
+            if ($guestToken) {
+                $payload['guest_token'] = $guestToken;
+            }
+
+            return $this->success($payload, 'Sepet boş.');
         }
 
         return $this->success(
@@ -91,36 +97,47 @@ class CartController extends Controller
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'product_id' => 'required|exists:products,id',
+            'product_id' => 'required|integer|exists:products,id',
             'quantity'   => 'required|integer|min:1',
         ]);
 
-        $product = Product::find($validatedData['product_id']);
-
-        if (!$product || (isset($product->is_active) && !$product->is_active)) {
-            return $this->error('Bu ürün şu anda satışta değil.', 400);
-        }
-
         [$cart, $token] = $this->findCart($request, true);
 
-        $cartItem = CartItem::where('cart_id', $cart->id)
-            ->where('product_id', $product->id)
-            ->first();
+        try {
+            DB::transaction(function () use ($cart, $validatedData) {
+                $product = Product::lockForUpdate()->find($validatedData['product_id']);
 
-        $newQuantity = ($cartItem ? $cartItem->quantity : 0) + $validatedData['quantity'];
+                if (!$product || (isset($product->is_active) && !$product->is_active)) {
+                    throw new \RuntimeException('Bu ürün şu anda satışta değil.');
+                }
 
-        if ($product->stock < $newQuantity) {
-            return $this->error("'{$product->name}' ürünü için yeterli stok bulunmuyor. (Mevcut stok: {$product->stock})", 400);
-        }
+                $cartItem = CartItem::where('cart_id', $cart->id)
+                    ->where('product_id', $product->id)
+                    ->lockForUpdate()
+                    ->first();
 
-        if ($cartItem) {
-            $cartItem->update(['quantity' => $newQuantity]);
-        } else {
-            CartItem::create([
-                'cart_id'    => $cart->id,
-                'product_id' => $product->id,
-                'quantity'   => $validatedData['quantity'],
-            ]);
+                $newQuantity = ($cartItem ? $cartItem->quantity : 0) + $validatedData['quantity'];
+
+                if ($product->stock < $newQuantity) {
+                    throw new \RuntimeException(
+                        "'{$product->name}' ürünü için yeterli stok bulunmuyor. (Mevcut stok: {$product->stock})"
+                    );
+                }
+
+                if ($cartItem) {
+                    $cartItem->update(['quantity' => $newQuantity]);
+                } else {
+                    CartItem::create([
+                        'cart_id'    => $cart->id,
+                        'product_id' => $product->id,
+                        'quantity'   => $validatedData['quantity'],
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
+        } catch (\Throwable $e) {
+            return $this->error('Ürün sepete eklenirken bir hata oluştu.', 500);
         }
 
         $cart->load('items.product');
@@ -145,25 +162,39 @@ class CartController extends Controller
             return $this->error('Sepet bulunamadı.', 404);
         }
 
-        $cartItem = CartItem::where('cart_id', $cart->id)
-            ->where('product_id', $productId)
-            ->first();
+        try {
+            DB::transaction(function () use ($cart, $productId, $validatedData) {
+                $cartItem = CartItem::where('cart_id', $cart->id)
+                    ->where('product_id', $productId)
+                    ->lockForUpdate()
+                    ->first();
 
-        if (!$cartItem) {
-            return $this->error('Sepette böyle bir ürün bulunamadı.', 404);
+                if (!$cartItem) {
+                    throw new \DomainException('Sepette böyle bir ürün bulunamadı.');
+                }
+
+                $product = Product::lockForUpdate()->find($productId);
+
+                if (!$product || (isset($product->is_active) && !$product->is_active)) {
+                    throw new \RuntimeException('Bu ürün şu anda satışta değil.');
+                }
+
+                if ($product->stock < $validatedData['quantity']) {
+                    throw new \RuntimeException(
+                        "'{$product->name}' ürünü için yeterli stok bulunmuyor. (Mevcut stok: {$product->stock})"
+                    );
+                }
+
+                $cartItem->update(['quantity' => $validatedData['quantity']]);
+            });
+        } catch (\DomainException $e) {
+            return $this->error($e->getMessage(), 404);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
+        } catch (\Throwable $e) {
+            return $this->error('Sepet güncellenirken bir hata oluştu.', 500);
         }
 
-        $product = Product::find($productId);
-
-        if (!$product || (isset($product->is_active) && !$product->is_active)) {
-            return $this->error('Bu ürün şu anda satışta değil.', 400);
-        }
-
-        if ($product->stock < $validatedData['quantity']) {
-            return $this->error("'{$product->name}' ürünü için yeterli stok bulunmuyor. (Mevcut stok: {$product->stock})", 400);
-        }
-
-        $cartItem->update(['quantity' => $validatedData['quantity']]);
         $cart->load('items.product');
 
         return $this->success(
@@ -271,7 +302,7 @@ class CartController extends Controller
         try {
             DB::transaction(function () use ($guestCart, $userCart) {
                 foreach ($guestCart->items as $guestItem) {
-                    $product = $guestItem->product;
+                    $product = Product::lockForUpdate()->find($guestItem->product_id);
 
                     if (!$product || (isset($product->is_active) && !$product->is_active)) {
                         continue;
@@ -283,6 +314,7 @@ class CartController extends Controller
 
                     $userItem = $userCart->items()
                         ->where('product_id', $guestItem->product_id)
+                        ->lockForUpdate()
                         ->first();
 
                     $desiredQuantity = ($userItem ? $userItem->quantity : 0) + $guestItem->quantity;
