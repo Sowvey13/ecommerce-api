@@ -12,12 +12,23 @@ class ProductController extends Controller
 {
     use ApiResponse;
 
-    public function index()
-    {
-        $products = Product::with('category')->paginate(10);
+    public function index(Request $request)
+{
+    $query = Product::with('category');
 
-        return $this->success($products, 'Ürünler başarıyla listelendi.');
+    if ($request->filled('category_id')) {
+        $query->where('category_id', $request->integer('category_id'));
     }
+
+    if ($request->filled('search')) {
+        $search = trim($request->string('search')->toString());
+        $query->where('name', 'like', '%' . $search . '%');
+    }
+
+    $products = $query->latest()->paginate(10);
+
+    return $this->success($products, 'Ürünler başarıyla listelendi.');
+}
 
     public function show($id)
     {

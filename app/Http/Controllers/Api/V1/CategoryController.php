@@ -53,6 +53,8 @@ class CategoryController extends Controller
             return $this->error('Kategori bulunamadı.', 404);
         }
 
+        $descendantIds = $this->getDescendantIds((int) $id);
+
         $validatedData = $request->validate([
             'name'      => 'sometimes|string|max:255',
             'parent_id' => [
@@ -60,7 +62,7 @@ class CategoryController extends Controller
                 'sometimes',
                 'integer',
                 'exists:categories,id',
-                Rule::notIn([$id]),
+                Rule::notIn([(int) $id, ...$descendantIds]),
             ],
         ]);
 
@@ -70,7 +72,7 @@ class CategoryController extends Controller
 
         $category->update($validatedData);
 
-        return $this->success($category, 'Kategori başarıyla güncellendi.');
+        return $this->success($category->fresh(), 'Kategori başarıyla güncellendi.');
     }
 
     public function destroy($id)
@@ -84,5 +86,30 @@ class CategoryController extends Controller
         $category->delete();
 
         return $this->success(null, 'Kategori başarıyla silindi.');
+    }
+
+    private function getDescendantIds(int $categoryId): array
+    {
+        $ids = [];
+        $queue = Category::where('parent_id', $categoryId)->pluck('id')->all();
+
+        while (!empty($queue)) {
+            $currentId = array_shift($queue);
+
+            if (in_array($currentId, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $currentId;
+
+            $childIds = Category::where('parent_id', $currentId)->pluck('id')->all();
+            foreach ($childIds as $childId) {
+                if (!in_array($childId, $ids, true)) {
+                    $queue[] = $childId;
+                }
+            }
+        }
+
+        return $ids;
     }
 }
