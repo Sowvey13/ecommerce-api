@@ -133,4 +133,19 @@ class AuthController extends Controller
 
         return $this->success(null, 'Şifreniz başarıyla güncellendi. Lütfen tekrar giriş yapın.');
     }
+
+    public function updateProfile(Request $request){
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
+        ]);
+
+        $user->update($validated);
+
+        return $this->success([
+            'user' => $user->fresh(),
+        ], 'Profil bilgileri güncellendi.');
+    }
 }
