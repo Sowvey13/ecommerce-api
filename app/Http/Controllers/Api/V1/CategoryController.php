@@ -7,6 +7,7 @@ use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -14,9 +15,13 @@ class CategoryController extends Controller
 {
     use ApiResponse;
 
+    private const CACHE_KEY = 'categories:all';
+
     public function index()
     {
-        $categories = Category::with('parent', 'children')->get();
+        $categories = Cache::remember(self::CACHE_KEY, now()->addMinutes(10), function () {
+            return Category::with('parent', 'children')->get();
+        });
 
         return $this->success(
             CategoryResource::collection($categories),
@@ -48,6 +53,8 @@ class CategoryController extends Controller
         $validatedData['slug'] = Str::slug($validatedData['name']) . '-' . Str::random(5);
 
         $category = Category::create($validatedData);
+
+        Cache::forget(self::CACHE_KEY);
 
         return $this->success(
             new CategoryResource($category),
@@ -83,6 +90,8 @@ class CategoryController extends Controller
 
         $category->update($validatedData);
 
+        Cache::forget(self::CACHE_KEY);
+
         return $this->success(
             new CategoryResource($category->fresh()),
             'Kategori başarıyla güncellendi.'
@@ -98,6 +107,8 @@ class CategoryController extends Controller
         }
 
         $category->delete();
+
+        Cache::forget(self::CACHE_KEY);
 
         return $this->success(null, 'Kategori başarıyla silindi.');
     }

@@ -3,39 +3,57 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreProductRequest;
+use App\Http\Requests\UpdateProductRequest;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
     use ApiResponse;
 
+    private const LIST_KEYS_CACHE_KEY = 'products:list:keys';
+
     public function index(Request $request)
     {
-        $query = Product::with('category');
+        $queryParams = $request->query();
+        ksort($queryParams);
+        $cacheKey = 'products:list:' . md5(json_encode($queryParams));
 
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
-        }
+        $payload = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
+            $query = Product::with('category');
 
-        if ($request->filled('search')) {
-            $search = trim($request->string('search')->toString());
-            $query->where('name', 'like', '%' . $search . '%');
-        }
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->integer('category_id'));
+            }
 
-        $paginator = $query->latest()->paginate(10);
+            if ($request->filled('search')) {
+                $search = trim($request->string('search')->toString());
+                $query->where('name', 'like', '%' . $search . '%');
+            }
+
+            $paginator = $query->latest()->paginate(10);
+
+            return [
+                'items' => $paginator->items(),
+                'meta'  => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page'    => $paginator->lastPage(),
+                    'per_page'     => $paginator->perPage(),
+                    'total'        => $paginator->total(),
+                ],
+            ];
+        });
+
+        $this->trackListCacheKey($cacheKey);
 
         return $this->success([
-            'items' => ProductResource::collection($paginator->items()),
-            'meta'  => [
-                'current_page' => $paginator->currentPage(),
-                'last_page'    => $paginator->lastPage(),
-                'per_page'     => $paginator->perPage(),
-                'total'        => $paginator->total(),
-            ],
+            'items' => ProductResource::collection($payload['items']),
+            'meta'  => $payload['meta'],
         ], 'Ürünler başarıyla listelendi.');
     }
 
@@ -50,24 +68,20 @@ class ProductController extends Controller
         return $this->success(new ProductResource($product), 'Ürün başarıyla görüntülendi.');
     }
 
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
-        $validatedData = $request->validate([
-            'category_id' => 'required|integer|exists:categories,id',
-            'name'        => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price'       => 'required|numeric|min:0',
-            'stock'       => 'required|integer|min:0',
-        ]);
+        $validatedData = $request->validated();
 
         $validatedData['slug'] = Str::slug($validatedData['name']) . '-' . Str::random(5);
 
         $product = Product::create($validatedData);
 
+        $this->clearProductListCache();
+
         return $this->success(new ProductResource($product), 'Ürün başarıyla oluşturuldu.', 201);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateProductRequest $request, $id)
     {
         $product = Product::find($id);
 
@@ -75,19 +89,15 @@ class ProductController extends Controller
             return $this->error('Ürün bulunamadı.', 404);
         }
 
-        $validatedData = $request->validate([
-            'category_id' => 'sometimes|required|integer|exists:categories,id',
-            'name'        => 'sometimes|required|string|max:255',
-            'description' => 'sometimes|nullable|string',
-            'price'       => 'sometimes|required|numeric|min:0',
-            'stock'       => 'sometimes|required|integer|min:0',
-        ]);
+        $validatedData = $request->validated();
 
         if (isset($validatedData['name'])) {
             $validatedData['slug'] = Str::slug($validatedData['name']) . '-' . Str::random(5);
         }
 
         $product->update($validatedData);
+
+        $this->clearProductListCache();
 
         return $this->success(new ProductResource($product->fresh()), 'Ürün başarıyla güncellendi.');
     }
@@ -102,6 +112,29 @@ class ProductController extends Controller
 
         $product->delete();
 
+        $this->clearProductListCache();
+
         return $this->success(null, 'Ürün başarıyla silindi.');
+    }
+
+    private function trackListCacheKey(string $key): void
+    {
+        $keys = Cache::get(self::LIST_KEYS_CACHE_KEY, []);
+
+        if (!in_array($key, $keys, true)) {
+            $keys[] = $key;
+            Cache::put(self::LIST_KEYS_CACHE_KEY, $keys, now()->addHours(24));
+        }
+    }
+
+    private function clearProductListCache(): void
+    {
+        $keys = Cache::get(self::LIST_KEYS_CACHE_KEY, []);
+
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+
+        Cache::forget(self::LIST_KEYS_CACHE_KEY);
     }
 }
