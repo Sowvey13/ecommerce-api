@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreAddressRequest;
+use App\Http\Requests\UpdateAddressRequest;
 use App\Http\Resources\AddressResource;
 use App\Models\Address;
 use App\Traits\ApiResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AddressController extends Controller
@@ -29,16 +30,9 @@ class AddressController extends Controller
         );
     }
 
-    public function store(Request $request)
+    public function store(StoreAddressRequest $request)
     {
-        $validatedData = $request->validate([
-            'title'        => 'required|string|max:255',
-            'address_line' => 'required|string',
-            'district'     => 'required|string|max:255',
-            'city'         => 'required|string|max:255',
-            'postal_code'  => 'nullable|string|max:20',
-            'is_default'   => 'boolean',
-        ]);
+        $validatedData = $request->validated();
 
         $userId = Auth::id();
 
@@ -79,7 +73,7 @@ class AddressController extends Controller
         );
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateAddressRequest $request, $id)
     {
         $userId = Auth::id();
 
@@ -89,14 +83,7 @@ class AddressController extends Controller
             return $this->error('Adres bulunamadı.', 404);
         }
 
-        $validatedData = $request->validate([
-            'title'        => 'sometimes|required|string|max:255',
-            'address_line' => 'sometimes|required|string',
-            'district'     => 'sometimes|required|string|max:255',
-            'city'         => 'sometimes|required|string|max:255',
-            'postal_code'  => 'nullable|string|max:20',
-            'is_default'   => 'boolean',
-        ]);
+        $validatedData = $request->validated();
 
         if (!empty($validatedData['is_default']) && $validatedData['is_default'] === true) {
             Address::where('user_id', $userId)->update(['is_default' => false]);

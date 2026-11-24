@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
+use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Address;
 use App\Models\Cart;
@@ -55,11 +57,9 @@ class OrderController extends Controller
         );
     }
 
-    public function store(Request $request)
+    public function store(StoreOrderRequest $request)
     {
-        $validatedData = $request->validate([
-            'address_id' => 'required|integer|exists:addresses,id',
-        ]);
+        $validatedData = $request->validated();
 
         $userId = Auth::id();
 
@@ -141,7 +141,7 @@ class OrderController extends Controller
         );
     }
 
-    public function updateStatus(Request $request, $id)
+    public function updateStatus(UpdateOrderStatusRequest $request, $id)
     {
         $user = $request->user();
 
@@ -149,9 +149,7 @@ class OrderController extends Controller
             return $this->error('Bu işlem için yetkiniz bulunmuyor.', 403);
         }
 
-        $validatedData = $request->validate([
-            'status' => 'required|string|in:pending,processing,shipped,delivered,cancelled',
-        ]);
+        $validatedData = $request->validated();
 
         try {
             $updatedOrder = DB::transaction(function () use ($id, $validatedData) {
@@ -313,4 +311,4 @@ class OrderController extends Controller
             'Ödeme başarıyla tamamlandı.'
         );
     }
-}   
+}

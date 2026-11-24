@@ -76,6 +76,7 @@ class MvpApiFlowTest extends TestCase
 
         Sanctum::actingAs($user);
 
+        
         $this->postJson('/api/v1/cart', [
             'product_id' => $product->id,
             'quantity'   => 2,
@@ -123,7 +124,7 @@ class MvpApiFlowTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        // 1) Yeterli stokla sipariş (3 stoktan 2 adet -> kalan stok 1)
+        
         $this->postJson('/api/v1/cart', [
             'product_id' => $product->id,
             'quantity'   => 2,
@@ -141,7 +142,7 @@ class MvpApiFlowTest extends TestCase
             'stock' => 1,
         ]);
 
-        // 2) Sepete 1 adet ekle, sonra sipariş anında stok yetersiz kalsın diye stoğu 0 yap
+        
         $this->postJson('/api/v1/cart', [
             'product_id' => $product->id,
             'quantity'   => 1,
@@ -196,11 +197,42 @@ class MvpApiFlowTest extends TestCase
         $created = $this->postJson('/api/v1/orders', ['address_id' => $address->id])->assertStatus(201);
         $orderId = $created->json('data.id');
 
+        
         Sanctum::actingAs($otherUser);
         $this->getJson("/api/v1/orders/{$orderId}")
             ->assertStatus(404);
 
+        
         $this->patchJson("/api/v1/orders/{$orderId}/status", ['status' => 'shipped'])
             ->assertStatus(403);
+    }
+
+    public function test_admin_can_list_users_and_customer_gets_forbidden(): void
+    {
+        $customer = User::factory()->create([
+            'name'  => 'Normal Müşteri',
+            'email' => 'musteri@example.com',
+            'role'  => 'customer',
+        ]);
+
+        $admin = User::factory()->create([
+            'name'  => 'Admin Kullanıcı',
+            'email' => 'admin@example.com',
+            'role'  => 'admin',
+        ]);
+
+        
+        Sanctum::actingAs($customer);
+        $this->getJson('/api/v1/admin/users')
+            ->assertStatus(403)
+            ->assertJsonPath('status', false);
+
+        
+        Sanctum::actingAs($admin);
+        $res = $this->getJson('/api/v1/admin/users?role=customer&search=Normal');
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', true)
+            ->assertJsonPath('data.items.0.email', 'musteri@example.com');
     }
 }

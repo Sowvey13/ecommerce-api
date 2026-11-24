@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Traits\ApiResponse;
@@ -18,13 +21,9 @@ class AuthController extends Controller
 {
     use ApiResponse;
 
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $validatedData = $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:6',
-        ]);
+        $validatedData = $request->validated();
 
         $user = User::create([
             'name'     => $validatedData['name'],
@@ -41,12 +40,9 @@ class AuthController extends Controller
         ], 'Kayıt başarıyla oluşturuldu.', 201);
     }
 
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $validatedData = $request->validate([
-            'email'    => 'required|email',
-            'password' => 'required|string',
-        ]);
+        $validatedData = $request->validated();
 
         if (!Auth::attempt($validatedData)) {
             return $this->error('Girdiğiniz bilgiler hatalı.', 401);
@@ -63,20 +59,20 @@ class AuthController extends Controller
     }
 
     public function logout(Request $request)
-{
-    $user = $request->user();
-    $token = $user?->currentAccessToken();
+    {
+        $user = $request->user();
+        $token = $user?->currentAccessToken();
 
-    if ($token) {
-        if (method_exists($token, 'delete')) {
-            $token->delete();
-        } elseif ($user && isset($token->id)) {
-            $user->tokens()->where('id', $token->id)->delete();
+        if ($token) {
+            if (method_exists($token, 'delete')) {
+                $token->delete();
+            } elseif ($user && isset($token->id)) {
+                $user->tokens()->where('id', $token->id)->delete();
+            }
         }
-    }
 
-    return $this->success(null, 'Çıkış başarıyla yapıldı.');
-}
+        return $this->success(null, 'Çıkış başarıyla yapıldı.');
+    }
 
     public function forgotPassword(Request $request)
     {
@@ -141,14 +137,10 @@ class AuthController extends Controller
         return $this->success(null, 'Şifreniz başarıyla güncellendi. Lütfen tekrar giriş yapın.');
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(UpdateProfileRequest $request)
     {
         $user = $request->user();
-
-        $validated = $request->validate([
-            'name'  => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
-        ]);
+        $validated = $request->validated();
 
         $user->update($validated);
 

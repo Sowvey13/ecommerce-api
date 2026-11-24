@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AddressController;
+use App\Http\Controllers\Api\V1\AdminUserController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\CategoryController;
@@ -26,6 +27,9 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
         ->middleware('admin');
 
     Route::post('/cart/merge', [CartController::class, 'merge']);
+
+    Route::get('/admin/users', [AdminUserController::class, 'index'])
+        ->middleware('admin');
 });
 
 Route::prefix('v1')->group(function () {
