@@ -127,6 +127,8 @@ class OrderController extends Controller
             'status' => 'required|string|in:pending,processing,shipped,delivered,cancelled',
         ]);
 
+        $userId = Auth::id();
+
         $order = Order::with('items')
             ->where('id', $id)
             ->first();

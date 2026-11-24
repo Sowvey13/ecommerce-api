@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
@@ -73,23 +74,12 @@ class CartController extends Controller
         return [null, null];
     }
 
-    private function cartPayload(Cart $cart, ?string $guestToken): array
-    {
-        $data = $cart->toArray();
-
-        if ($guestToken) {
-            $data['guest_token'] = $guestToken;
-        }
-
-        return $data;
-    }   
-
     public function index(Request $request)
     {
         [$cart, $guestToken] = $this->findCart($request, false);
 
         if (!$cart) {
-            return $this->error('Sepet bulunamadı.', 404);  
+            return $this->error('Sepet bulunamadı.', 404);
         }
 
         return $this->success(
@@ -204,6 +194,122 @@ class CartController extends Controller
         return $this->success(
             $this->cartPayload($cart, $token ?? $cart->guest_token),
             'Ürün sepetten başarıyla silindi.'
+        );
+    }
+
+    private function cartPayload(Cart $cart, ?string $guestToken): array
+    {
+        $data = $cart->toArray();
+
+        if ($guestToken) {
+            $data['guest_token'] = $guestToken;
+        }
+
+        return $data;
+    }
+
+    public function merge(Request $request)
+    {
+        $userId = $this->currentUserId($request);
+
+        if (!$userId) {
+            return $this->error('Sepet birleştirmek için giriş yapmalısınız.', 401);
+        }
+
+        $validated = $request->validate([
+            'guest_token' => 'nullable|string',
+        ]);
+
+        $guestToken = $request->header('X-Cart-Token') ?: ($validated['guest_token'] ?? null);
+
+        if (!$guestToken) {
+            return $this->error('Misafir sepet token\'ı bulunamadı.', 400);
+        }
+
+        $guestCart = Cart::with('items.product')
+            ->where('guest_token', $guestToken)
+            ->first();
+
+        $userCart = Cart::with('items.product')
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$guestCart || $guestCart->items->isEmpty()) {
+            if ($guestCart) {
+                $guestCart->delete();
+            }
+
+            if (!$userCart) {
+                $userCart = Cart::create([
+                    'user_id'     => $userId,
+                    'guest_token' => null,
+                ]);
+            }
+
+            $userCart->load('items.product');
+
+            return $this->success(
+                $this->cartPayload($userCart, null),
+                'Birleştirilecek misafir sepeti bulunamadı.'
+            );
+        }
+
+        if (!$userCart) {
+            $guestCart->update([
+                'user_id'     => $userId,
+                'guest_token' => null,
+            ]);
+
+            $guestCart->load('items.product');
+
+            return $this->success(
+                $this->cartPayload($guestCart, null),
+                'Misafir sepeti kullanıcı sepetine aktarıldı.'
+            );
+        }
+
+        try {
+            DB::transaction(function () use ($guestCart, $userCart) {
+                foreach ($guestCart->items as $guestItem) {
+                    $product = $guestItem->product;
+
+                    if (!$product || (isset($product->is_active) && !$product->is_active)) {
+                        continue;
+                    }
+
+                    if ($product->stock < 1) {
+                        continue;
+                    }
+
+                    $userItem = $userCart->items()
+                        ->where('product_id', $guestItem->product_id)
+                        ->first();
+
+                    $desiredQuantity = ($userItem ? $userItem->quantity : 0) + $guestItem->quantity;
+                    $finalQuantity = min($desiredQuantity, $product->stock);
+
+                    if ($userItem) {
+                        $userItem->update(['quantity' => $finalQuantity]);
+                    } else {
+                        $userCart->items()->create([
+                            'product_id' => $guestItem->product_id,
+                            'quantity'   => $finalQuantity,
+                        ]);
+                    }
+                }
+
+                $guestCart->items()->delete();
+                $guestCart->delete();
+            });
+        } catch (\Throwable $e) {
+            return $this->error('Sepetler birleştirilirken bir hata oluştu.', 500);
+        }
+
+        $userCart->load('items.product');
+
+        return $this->success(
+            $this->cartPayload($userCart, null),
+            'Sepetler başarıyla birleştirildi.'
         );
     }
 }
