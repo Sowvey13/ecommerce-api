@@ -55,6 +55,19 @@ class AddressController extends Controller
         return $this->success($address, 'Adres başarıyla eklendi.', 201);
     }
 
+    public function show($id)
+    {
+        $userId = Auth::id();
+
+        $address = Address::where('user_id', $userId)->where('id', $id)->first();
+
+        if (!$address) {
+            return $this->error('Adres bulunamadı.', 404);
+        }
+
+        return $this->success($address, 'Adres detayı getirildi.');
+    }
+
     public function update(Request $request, $id)
     {
         $userId = Auth::id();
@@ -80,7 +93,7 @@ class AddressController extends Controller
 
         $address->update($validatedData);
 
-        return $this->success($address, 'Adres başarıyla güncellendi.');
+        return $this->success($address->fresh(), 'Adres başarıyla güncellendi.');
     }
 
     public function destroy($id)
