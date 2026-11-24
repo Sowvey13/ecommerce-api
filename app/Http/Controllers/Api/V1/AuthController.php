@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->success([
-            'user'  => $user,
+            'user'  => new UserResource($user),
             'token' => $token,
         ], 'Kayıt başarıyla oluşturuldu.', 201);
     }
@@ -56,21 +57,26 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return $this->success([
-            'user'  => $user,
+            'user'  => new UserResource($user),
             'token' => $token,
         ], 'Giriş başarıyla yapıldı.', 200);
     }
 
     public function logout(Request $request)
-    {
-        $token = $request->user()?->currentAccessToken();
+{
+    $user = $request->user();
+    $token = $user?->currentAccessToken();
 
-        if ($token) {
+    if ($token) {
+        if (method_exists($token, 'delete')) {
             $token->delete();
+        } elseif ($user && isset($token->id)) {
+            $user->tokens()->where('id', $token->id)->delete();
         }
-
-        return $this->success(null, 'Çıkış başarıyla yapıldı.');
     }
+
+    return $this->success(null, 'Çıkış başarıyla yapıldı.');
+}
 
     public function forgotPassword(Request $request)
     {
@@ -147,7 +153,7 @@ class AuthController extends Controller
         $user->update($validated);
 
         return $this->success([
-            'user' => $user->fresh(),
+            'user' => new UserResource($user->fresh()),
         ], 'Profil bilgileri güncellendi.');
     }
 }

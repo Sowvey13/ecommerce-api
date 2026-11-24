@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\OrderResource;
 use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Order;
@@ -29,7 +30,10 @@ class OrderController extends Controller
             return $this->success([], 'Henüz bir siparişiniz bulunmuyor.');
         }
 
-        return $this->success($orders, 'Siparişler başarıyla listelendi.');
+        return $this->success(
+            OrderResource::collection($orders),
+            'Siparişler başarıyla listelendi.'
+        );
     }
 
     public function show($id)
@@ -45,7 +49,10 @@ class OrderController extends Controller
             return $this->error('Sipariş bulunamadı.', 404);
         }
 
-        return $this->success($order, 'Sipariş detayları başarıyla getirildi.');
+        return $this->success(
+            new OrderResource($order),
+            'Sipariş detayları başarıyla getirildi.'
+        );
     }
 
     public function store(Request $request)
@@ -128,7 +135,7 @@ class OrderController extends Controller
         }
 
         return $this->success(
-            $order->load('items.product', 'address'),
+            new OrderResource($order->load('items.product', 'address')),
             'Sipariş başarıyla oluşturuldu.',
             201
         );
@@ -190,7 +197,7 @@ class OrderController extends Controller
         }
 
         return $this->success(
-            $updatedOrder->load('items.product', 'address'),
+            new OrderResource($updatedOrder->load('items.product', 'address')),
             'Sipariş durumu başarıyla güncellendi.'
         );
     }
@@ -242,7 +249,7 @@ class OrderController extends Controller
         }
 
         return $this->success(
-            $cancelledOrder->fresh()->load('items.product', 'address'),
+            new OrderResource($cancelledOrder->fresh()->load('items.product', 'address')),
             'Sipariş başarıyla iptal edildi ve stoklar iade edildi.'
         );
     }
@@ -302,8 +309,8 @@ class OrderController extends Controller
         }
 
         return $this->success(
-            $paidOrder->fresh()->load('items.product', 'address'),
+            new OrderResource($paidOrder->fresh()->load('items.product', 'address')),
             'Ödeme başarıyla tamamlandı.'
         );
     }
-}
+}   

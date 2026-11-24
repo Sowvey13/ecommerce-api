@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AddressResource;
 use App\Models\Address;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,10 @@ class AddressController extends Controller
             return $this->success([], 'Henüz kayıtlı bir adresiniz bulunmuyor.');
         }
 
-        return $this->success($addresses, 'Adresler başarıyla listelendi.');
+        return $this->success(
+            AddressResource::collection($addresses),
+            'Adresler başarıyla listelendi.'
+        );
     }
 
     public function store(Request $request)
@@ -52,7 +56,11 @@ class AddressController extends Controller
             ...$validatedData,
         ]);
 
-        return $this->success($address, 'Adres başarıyla eklendi.', 201);
+        return $this->success(
+            new AddressResource($address),
+            'Adres başarıyla eklendi.',
+            201
+        );
     }
 
     public function show($id)
@@ -65,7 +73,10 @@ class AddressController extends Controller
             return $this->error('Adres bulunamadı.', 404);
         }
 
-        return $this->success($address, 'Adres detayı getirildi.');
+        return $this->success(
+            new AddressResource($address),
+            'Adres detayı getirildi.'
+        );
     }
 
     public function update(Request $request, $id)
@@ -93,7 +104,10 @@ class AddressController extends Controller
 
         $address->update($validatedData);
 
-        return $this->success($address->fresh(), 'Adres başarıyla güncellendi.');
+        return $this->success(
+            new AddressResource($address->fresh()),
+            'Adres başarıyla güncellendi.'
+        );
     }
 
     public function destroy($id)

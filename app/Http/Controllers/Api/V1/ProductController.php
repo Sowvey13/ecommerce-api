@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -25,9 +26,17 @@ class ProductController extends Controller
             $query->where('name', 'like', '%' . $search . '%');
         }
 
-        $products = $query->latest()->paginate(10);
+        $paginator = $query->latest()->paginate(10);
 
-        return $this->success($products, 'Ürünler başarıyla listelendi.');
+        return $this->success([
+            'items' => ProductResource::collection($paginator->items()),
+            'meta'  => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+            ],
+        ], 'Ürünler başarıyla listelendi.');
     }
 
     public function show($id)
@@ -38,7 +47,7 @@ class ProductController extends Controller
             return $this->error('Ürün bulunamadı.', 404);
         }
 
-        return $this->success($product, 'Ürün başarıyla görüntülendi.');
+        return $this->success(new ProductResource($product), 'Ürün başarıyla görüntülendi.');
     }
 
     public function store(Request $request)
@@ -55,7 +64,7 @@ class ProductController extends Controller
 
         $product = Product::create($validatedData);
 
-        return $this->success($product, 'Ürün başarıyla oluşturuldu.', 201);
+        return $this->success(new ProductResource($product), 'Ürün başarıyla oluşturuldu.', 201);
     }
 
     public function update(Request $request, $id)
@@ -80,7 +89,7 @@ class ProductController extends Controller
 
         $product->update($validatedData);
 
-        return $this->success($product->fresh(), 'Ürün başarıyla güncellendi.');
+        return $this->success(new ProductResource($product->fresh()), 'Ürün başarıyla güncellendi.');
     }
 
     public function destroy($id)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -15,20 +16,26 @@ class CategoryController extends Controller
 
     public function index()
     {
-        $categories = Category::with('parent', 'children', 'products')->get();
+        $categories = Category::with('parent', 'children')->get();
 
-        return $this->success($categories, 'Kategoriler başarıyla listelendi.');
+        return $this->success(
+            CategoryResource::collection($categories),
+            'Kategoriler başarıyla listelendi.'
+        );
     }
 
     public function show($id)
     {
-        $category = Category::with('parent', 'children', 'products')->find($id);
+        $category = Category::with('parent', 'children')->find($id);
 
         if (!$category) {
             return $this->error('Kategori bulunamadı.', 404);
         }
 
-        return $this->success($category, 'Kategori başarıyla görüntülendi.');
+        return $this->success(
+            new CategoryResource($category),
+            'Kategori başarıyla görüntülendi.'
+        );
     }
 
     public function store(Request $request)
@@ -42,7 +49,11 @@ class CategoryController extends Controller
 
         $category = Category::create($validatedData);
 
-        return $this->success($category, 'Kategori başarıyla oluşturuldu.', 201);
+        return $this->success(
+            new CategoryResource($category),
+            'Kategori başarıyla oluşturuldu.',
+            201
+        );
     }
 
     public function update(Request $request, $id)
@@ -72,7 +83,10 @@ class CategoryController extends Controller
 
         $category->update($validatedData);
 
-        return $this->success($category->fresh(), 'Kategori başarıyla güncellendi.');
+        return $this->success(
+            new CategoryResource($category->fresh()),
+            'Kategori başarıyla güncellendi.'
+        );
     }
 
     public function destroy($id)
