@@ -80,7 +80,7 @@ class AuthController extends Controller
 
         $plainToken = Str::random(64);
 
-        DB::table('password_reset_token')->updateOrInsert(
+        DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $validated['email']],
             [
                'token' => Hash::make($plainToken),
