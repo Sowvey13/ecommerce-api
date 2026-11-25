@@ -30,6 +30,8 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
 
     Route::get('/admin/users', [AdminUserController::class, 'index'])
         ->middleware('admin');
+    Route::get('/admin/users/{id}/orders', [AdminUserController::class, 'orders'])
+        ->middleware('admin');
 });
 
 Route::prefix('v1')->group(function () {

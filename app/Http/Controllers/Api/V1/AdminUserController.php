@@ -7,6 +7,8 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use App\Http\Resources\OrderResource;
+use App\Models\Order;
 
 class AdminUserController extends Controller
 {
@@ -49,5 +51,30 @@ class AdminUserController extends Controller
                 'total'        => $paginator->total(),
             ],
         ], 'Kullanıcılar başarıyla listelendi.');
+    }
+
+    public function orders(Request $request, $id)
+    {
+        $authUser = $request->user();
+
+        if (!$authUser || $authUser->role !== 'admin') {
+            return $this->error('Bu işlem için yetkiniz bulunmuyor.', 403);
+        }
+
+        $targetUser = User::find($id);
+
+        if (!$targetUser) {
+            return $this->error('Kullanıcı bulunamadı.', 404);
+        }
+
+        $orders = Order::with('items.product', 'address')
+            ->where('user_id', $targetUser->id)
+            ->latest()
+            ->get();
+
+        return $this->success([
+            'user'   => new UserResource($targetUser),
+            'orders' => OrderResource::collection($orders),
+        ], 'Kullanıcı siparişleri başarıyla getirildi.');
     }
 }

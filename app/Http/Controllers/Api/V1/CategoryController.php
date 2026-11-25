@@ -17,14 +17,16 @@ class CategoryController extends Controller
 
     private const CACHE_KEY = 'categories:all';
 
-    public function index()
+    public function index(Request $request)
     {
-        $categories = Cache::remember(self::CACHE_KEY, now()->addMinutes(10), function () {
-            return Category::with('parent', 'children')->get();
+        $categories = Cache::remember(self::CACHE_KEY, now()->addMinutes(10), function () use ($request) {
+            $models = Category::with('parent', 'children')->get();
+
+            return CategoryResource::collection($models)->resolve($request);
         });
 
         return $this->success(
-            CategoryResource::collection($categories),
+            $categories,
             'Kategoriler başarıyla listelendi.'
         );
     }

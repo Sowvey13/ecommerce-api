@@ -39,7 +39,7 @@ class ProductController extends Controller
             $paginator = $query->latest()->paginate(10);
 
             return [
-                'items' => $paginator->items(),
+                'items' => ProductResource::collection(collect($paginator->items()))->resolve(),
                 'meta'  => [
                     'current_page' => $paginator->currentPage(),
                     'last_page'    => $paginator->lastPage(),
@@ -51,10 +51,7 @@ class ProductController extends Controller
 
         $this->trackListCacheKey($cacheKey);
 
-        return $this->success([
-            'items' => ProductResource::collection($payload['items']),
-            'meta'  => $payload['meta'],
-        ], 'Ürünler başarıyla listelendi.');
+        return $this->success($payload, 'Ürünler başarıyla listelendi.');
     }
 
     public function show($id)
